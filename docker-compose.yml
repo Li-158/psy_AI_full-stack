@@ -1,0 +1,70 @@
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: psychology_lab_db
+    environment:
+      POSTGRES_DB: psychology_lab
+      POSTGRES_USER: labuser
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-labpassword123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - lab_network
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labuser -d psychology_lab"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: psychology_lab_api
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://labuser:${POSTGRES_PASSWORD:-labpassword123}@postgres:5432/psychology_lab
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret-key-change-in-production}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - lab_network
+    restart: unless-stopped
+    #healthcheck:
+    #  test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+    #  interval: 30s
+    #  timeout: 10s
+    #  retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: psychology_lab_frontend
+    environment:
+      REACT_APP_API_URL: /api
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - lab_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  lab_network:
+    driver: bridge

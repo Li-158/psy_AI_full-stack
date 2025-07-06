@@ -1,0 +1,281 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { Pool } from 'pg';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { Request, Response, NextFunction } from 'express';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const PORT = process.env.PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error('❌ DATABASE_URL is required');
+  process.exit(1);
+}
+
+// PostgreSQL 錯誤介面
+interface PostgreSQLError extends Error {
+  code?: string;
+  detail?: string;
+}
+
+// 建立資料庫連線池
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+// 建立 Express 應用
+const app = express();
+
+// 中間件
+app.use(helmet());
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  credentials: true
+}));
+app.use(express.json({ limit: '10mb' }));
+
+// API 請求頻率限制
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: 'Too many requests, please try again later.'
+});
+app.use('/api/', limiter);
+
+// 型別定義
+interface User {
+  id: string;
+  email: string;
+  role: 'admin' | 'researcher';
+  researcherId?: string;
+}
+
+interface AuthenticatedRequest extends Request {
+  user?: User;
+}
+
+// 錯誤處理函數
+const handleDatabaseError = (error: unknown) => {
+  const pgError = error as PostgreSQLError;
+  console.error('Database error:', pgError);
+  
+  switch (pgError.code) {
+    case '23505':
+      return { status: 400, message: 'Data already exists' };
+    case '23503':
+      return { status: 400, message: 'Invalid reference' };
+    case '23514':
+      return { status: 400, message: 'Invalid data format' };
+    default:
+      return { status: 500, message: 'Internal server error' };
+  }
+};
+
+// JWT 驗證中間件
+const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    res.status(401).json({ error: 'Access token required' });
+    return;
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    
+    const userQuery = `
+      SELECT u.id, u.email, u.role, r.id as researcher_id
+      FROM users u
+      LEFT JOIN researchers r ON u.id = r.user_id
+      WHERE u.id = $1
+    `;
+    
+    const userResult = await pool.query(userQuery, [decoded.userId]);
+    
+    if (userResult.rows.length === 0) {
+      res.status(401).json({ error: 'Invalid token' });
+      return;
+    }
+
+    req.user = {
+      id: userResult.rows[0].id,
+      email: userResult.rows[0].email,
+      role: userResult.rows[0].role,
+      researcherId: userResult.rows[0].researcher_id,
+    };
+
+    next();
+  } catch (error) {
+    res.status(403).json({ error: 'Invalid token' });
+  }
+};
+
+// 健康檢查
+app.get('/api/health', async (req: Request, res: Response) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ 
+      status: 'healthy', 
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      status: 'unhealthy',
+      database: 'disconnected'
+    });
+  }
+});
+
+// 登入
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password required' });
+  }
+
+  try {
+    const userQuery = `
+      SELECT u.id, u.email, u.password_hash, u.role, r.id as researcher_id
+      FROM users u
+      LEFT JOIN researchers r ON u.id = r.user_id
+      WHERE u.email = $1
+    `;
+    
+    const result = await pool.query(userQuery, [email.toLowerCase()]);
+    
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = result.rows[0];
+    const isValid = await bcrypt.compare(password, user.password_hash);
+
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        researcherId: user.researcher_id,
+      },
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// 獲取個人資料
+app.get('/api/auth/profile', authenticateToken, (req: AuthenticatedRequest, res: Response) => {
+  res.json({ user: req.user });
+});
+
+// 獲取參與者列表
+app.get('/api/participants', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const query = 'SELECT * FROM participants ORDER BY created_at DESC';
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    const errorInfo = handleDatabaseError(error);
+    res.status(errorInfo.status).json({ error: errorInfo.message });
+  }
+});
+
+// 新增參與者
+app.post('/api/participants', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  const { name, gender, email, phone, birthDate, address, status } = req.body;
+
+  if (!name || !gender || !phone || !birthDate) {
+    return res.status(400).json({ error: 'Required fields missing' });
+  }
+
+  try {
+    const query = `
+      INSERT INTO participants (name, gender, email, phone, birth_date, address, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `;
+    
+    const result = await pool.query(query, [
+      name, gender, email || null, phone, birthDate, address || null, status || 'active'
+    ]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    const errorInfo = handleDatabaseError(error);
+    res.status(errorInfo.status).json({ error: errorInfo.message });
+  }
+});
+
+// 獲取計畫列表
+app.get('/api/projects', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const query = 'SELECT * FROM projects ORDER BY created_at DESC';
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    const errorInfo = handleDatabaseError(error);
+    res.status(errorInfo.status).json({ error: errorInfo.message });
+  }
+});
+
+// 錯誤處理
+app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error('Unhandled error:', error);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// 404 處理
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// 啟動伺服器
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// 優雅關閉
+const gracefulShutdown = async () => {
+  console.log('\n🛑 Shutting down server...');
+  server.close(async () => {
+    try {
+      await pool.end();
+      console.log('✅ Server closed');
+      process.exit(0);
+    } catch (error) {
+      console.error('❌ Shutdown error:', error);
+      process.exit(1);
+    }
+  });
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+
+export default app;
