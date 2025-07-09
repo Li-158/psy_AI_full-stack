@@ -33,7 +33,7 @@ const ProjectStatusItem = ({ projectKey, projectData, participantId, onUpdate, i
   
   return (
     <div className="border rounded-lg overflow-hidden">
-      <div 
+      <div
         className="p-4 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
         onClick={onToggle}
       >
@@ -379,10 +379,10 @@ const ParticipantManagementApp = () => {
       participant.subProjectId.toLowerCase().includes(searchLower)
     );
     
-    const matchesProjectFilter = !filterProject || 
+    const matchesProjectFilter = !filterProject ||
       Object.keys(participant.projectStatus || {}).some(key => key.startsWith(filterProject));
     
-    const matchesSubProjectFilter = !filterSubProject || 
+    const matchesSubProjectFilter = !filterSubProject ||
       Object.keys(participant.projectStatus || {}).some(key => key.includes(filterSubProject));
     
     return matchesSearch && matchesProjectFilter && matchesSubProjectFilter;
@@ -530,7 +530,7 @@ const ParticipantManagementApp = () => {
   };
 
   const handleSaveEdit = () => {
-    setParticipants(participants.map(p => 
+    setParticipants(participants.map(p =>
       p.id === editingId ? { ...formData, id: editingId } : p
     ));
     setEditingId(null);
@@ -541,7 +541,7 @@ const ParticipantManagementApp = () => {
   };
 
   const handleUpdateProjectDescription = (projectId, newDescription) => {
-    setProjects(projects.map(p => 
+    setProjects(projects.map(p =>
       p.id === projectId ? { ...p, description: newDescription } : p
     ));
     setEditingProjectDescription(false);
@@ -916,7 +916,7 @@ const ParticipantManagementApp = () => {
                 
                 return (
                   <div key={participant.id} className="border rounded-lg overflow-hidden">
-                    <div 
+                    <div
                       className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
                       onClick={() => setExpandedParticipants({ ...expandedParticipants, [participant.id]: !isExpanded })}
                     >
@@ -1335,8 +1335,8 @@ const ParticipantManagementApp = () => {
                       onChange={(e) => {
                         const projectId = e.target.value;
                         setAddProjectForm({
-                          ...addProjectForm, 
-                          projectId: projectId, 
+                          ...addProjectForm,
+                          projectId: projectId,
                           subProjectId: '',
                           participantProjectId: (() => {
                             const existingProjects = Object.entries(selectedParticipant.projectStatus || {})

@@ -1,20 +1,9 @@
 import axios from 'axios';
 
-// API base URL 讀取 .env，如果沒設定就預設 /api（建議你已經設定）
+// 在容器環境中使用相對路徑
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
-// 測試用 API 路徑（請自行替換）
-export const getSomething = () => {
-    return axios.get(`${API_BASE_URL}/api/health`); // 你可以改成你自己的 API 路徑
-};
-
-// 測試函式：前端載入時可以直接呼叫來確認連線
-export const testApiConnection = () => {
-    console.log('目前 API base URL:', API_BASE_URL);
-    getSomething()
-        .then(response => console.log('✅ API 成功回傳:', response.data))
-        .catch(error => console.error('❌ API 連線失敗:', error));
-};
+console.log('🔌 API Base URL:', API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -29,14 +18,18 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log('📤 API Request:', config.method?.toUpperCase(), config.url);
   return config;
 });
 
-
 // 響應攔截器
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('📥 API Response:', response.status, response.config.url);
+    return response;
+  },
   (error) => {
+    console.error('❌ API Error:', error.response?.status, error.config?.url);
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/login';
@@ -44,6 +37,19 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// 測試 API 連接
+export const testApiConnection = async () => {
+  try {
+    console.log('🧪 測試 API 連接...');
+    const response = await api.get('/health');
+    console.log('✅ API 連接成功:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ API 連接失敗:', error);
+    throw error;
+  }
+};
 
 export const authAPI = {
   login: (email: string, password: string) =>
@@ -54,10 +60,15 @@ export const authAPI = {
 export const participantAPI = {
   getAll: () => api.get('/participants'),
   create: (data: any) => api.post('/participants', data),
+  update: (id: string, data: any) => api.put(`/participants/${id}`, data),
+  delete: (id: string) => api.delete(`/participants/${id}`),
 };
 
 export const projectAPI = {
   getAll: () => api.get('/projects'),
+  create: (data: any) => api.post('/projects', data),
+  update: (id: string, data: any) => api.put(`/projects/${id}`, data),
+  delete: (id: string) => api.delete(`/projects/${id}`),
 };
 
 export default api;

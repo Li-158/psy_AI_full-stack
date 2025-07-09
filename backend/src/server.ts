@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const DATABASE_URL = process.env.DATABASE_URL;
 
+
 console.log('🚀 Starting server...');
 console.log('PORT:', PORT);
 console.log('DATABASE_URL:', DATABASE_URL ? 'Set' : 'Not set');
@@ -58,9 +59,12 @@ const app = express();
 
 // 中間件
 app.use(helmet());
+// 更寬鬆的 CORS 設定（生產環境請修改）
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
-  credentials: true
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '10mb' }));
 
@@ -165,6 +169,8 @@ app.get('/api/health', async (req: Request, res: Response) => {
 // 登入
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   const { email, password } = req.body;
+  
+  console.log('🔐 Login attempt:', email);
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password required' });
@@ -180,12 +186,17 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     
     const result = await pool.query(userQuery, [email.toLowerCase()]);
     
+    console.log('📊 User found:', result.rows.length > 0 ? 'Yes' : 'No');
+    
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = result.rows[0];
+    console.log('🔒 Password hash exists:', !!user.password_hash);
+    
     const isValid = await bcrypt.compare(password, user.password_hash);
+    console.log('✅ Password valid:', isValid);
 
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -258,6 +269,34 @@ app.post('/api/participants', authenticateToken, async (req: AuthenticatedReques
   }
 });
 
+// 🆕 公開端點 - 新增參與者
+app.post('/api/participants/public', async (req: Request, res: Response) => {
+  const { name, gender, email, phone, birth_date, birthDate, address, status } = req.body;
+  const actualBirthDate = birth_date || birthDate;
+
+  if (!name || !gender || !phone || !actualBirthDate) {
+    return res.status(400).json({ error: 'Required fields missing' });
+  }
+
+  try {
+    const query = `
+      INSERT INTO participants (name, gender, email, phone, birth_date, address, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `;
+    
+    const result = await pool.query(query, [
+      name, gender, email || null, phone, actualBirthDate, address || null, status || 'active'
+    ]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Create participant error:', error);
+    const errorInfo = handleDatabaseError(error);
+    res.status(errorInfo.status).json({ error: errorInfo.message });
+  }
+});
+
 // 獲取計畫列表
 app.get('/api/projects', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -266,6 +305,106 @@ app.get('/api/projects', authenticateToken, async (req: AuthenticatedRequest, re
     res.json(result.rows);
   } catch (error) {
     console.error('Get projects error:', error);
+    const errorInfo = handleDatabaseError(error);
+    res.status(errorInfo.status).json({ error: errorInfo.message });
+  }
+});
+
+// 🆕 公開端點 - 獲取計畫列表
+app.get('/api/projects/public', async (req: Request, res: Response) => {
+  try {
+    const query = 'SELECT * FROM projects ORDER BY created_at DESC';
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get projects error:', error);
+    const errorInfo = handleDatabaseError(error);
+    res.status(errorInfo.status).json({ error: errorInfo.message });
+  }
+});
+
+// 🆕 公開端點 - 新增計畫
+app.post('/api/projects/public', async (req: Request, res: Response) => {
+  const { project_number, title, description, status } = req.body;
+
+  if (!project_number || !title) {
+    return res.status(400).json({ error: 'Required fields missing' });
+  }
+
+  try {
+    const query = `
+      INSERT INTO projects (project_number, title, description, status)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `;
+    
+    const result = await pool.query(query, [
+      project_number, title, description || null, status || 'active'
+    ]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Create project error:', error);
+    const errorInfo = handleDatabaseError(error);
+    res.status(errorInfo.status).json({ error: errorInfo.message });
+  }
+});
+
+// 🆕 公開端點 - 刪除參與者
+app.delete('/api/participants/public/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const query = 'DELETE FROM participants WHERE id = $1 RETURNING *';
+    const result = await pool.query(query, [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Participant not found' });
+    }
+
+    res.json({ message: 'Participant deleted successfully' });
+  } catch (error) {
+    console.error('Delete participant error:', error);
+    const errorInfo = handleDatabaseError(error);
+    res.status(errorInfo.status).json({ error: errorInfo.message });
+  }
+});
+
+// 🆕 公開端點 - 獲取子計畫列表
+app.get('/api/subprojects/public', async (req: Request, res: Response) => {
+  try {
+    const query = 'SELECT * FROM subprojects ORDER BY created_at DESC';
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get subprojects error:', error);
+    const errorInfo = handleDatabaseError(error);
+    res.status(errorInfo.status).json({ error: errorInfo.message });
+  }
+});
+
+// 🆕 公開端點 - 新增子計畫
+app.post('/api/subprojects/public', async (req: Request, res: Response) => {
+  const { project_id, subproject_number, title, description, status } = req.body;
+
+  if (!project_id || !subproject_number || !title) {
+    return res.status(400).json({ error: 'Required fields missing' });
+  }
+
+  try {
+    const query = `
+      INSERT INTO subprojects (project_id, subproject_number, title, description, status)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `;
+    
+    const result = await pool.query(query, [
+      project_id, subproject_number, title, description || null, status || 'active'
+    ]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Create subproject error:', error);
     const errorInfo = handleDatabaseError(error);
     res.status(errorInfo.status).json({ error: errorInfo.message });
   }
