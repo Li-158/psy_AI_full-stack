@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 資料庫
+  db:
+    image: postgres:15-alpine
+    container_name: psychology-lab-db
+    environment:
+      POSTGRES_DB: psychologylab
+      POSTGRES_USER: psychologylab
+      POSTGRES_PASSWORD: your-secure-database-password-123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./scripts/seed_data.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U psychologylab -d psychologylab"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Python Backend API
+  backend:
+    build: .
+    container_name: psychology-lab-backend
+    environment:
+      DATABASE_URL: postgresql://psychologylab:your-secure-database-password-123@db:5432/psychologylab
+      JWT_SECRET: your-super-secure-jwt-secret-key-at-least-32-characters-long
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRATION_HOURS: 24
+      APP_NAME: Psychology Lab API
+      APP_VERSION: 1.0.0
+      DEBUG: false
+      HOST: 0.0.0.0
+      PORT: 3001
+      CORS_ORIGINS: '["http://localhost:3000", "http://frontend:3000"]'
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app:ro
+      - ./scripts:/app/scripts:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:3001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # pgAdmin (可選的資料庫管理工具)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: psychology-lab-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@psychologylab.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    restart: unless-stopped
+    profiles:
+      - dev  # 只在開發環境中啟動
+
+volumes:
+  postgres_data:
+    name: psychology-lab-postgres-data
+  pgadmin_data:
+    name: psychology-lab-pgadmin-data
+
+networks:
+  default:
+    name: psychology-lab-network

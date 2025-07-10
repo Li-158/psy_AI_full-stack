@@ -1,51 +1,72 @@
+version: '3.8'
+
 services:
+  # PostgreSQL 資料庫
   postgres:
     image: postgres:15-alpine
     container_name: psychology_lab_db
     environment:
-      POSTGRES_DB: psychology_lab
-      POSTGRES_USER: labuser
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-BMLab_secure_test_password}
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: psychologylab
+      POSTGRES_USER: psychologylab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your-secure-database-password-123}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./backend/scripts/init_db.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./backend/scripts/seed_data.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    ports:
+      - "5432:5432"
     networks:
       - lab_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U labuser -d psychology_lab"]
+      test: ["CMD-SHELL", "pg_isready -U psychologylab -d psychologylab"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # Python Backend API
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: psychology_lab_api
     environment:
-      NODE_ENV: production
+      DATABASE_URL: postgresql://psychologylab:${POSTGRES_PASSWORD:-your-secure-database-password-123}@postgres:5432/psychologylab
+      JWT_SECRET: ${JWT_SECRET:-your-super-secure-jwt-secret-key-at-least-32-characters-long}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRATION_HOURS: 24
+      APP_NAME: Psychology Lab API
+      APP_VERSION: 1.0.0
+      DEBUG: false
+      HOST: 0.0.0.0
       PORT: 3001
-      DATABASE_URL: postgresql://labuser:${POSTGRES_PASSWORD:-BMLab_secure_test_password}@postgres:5432/psychology_lab
-      JWT_SECRET: ${JWT_SECRET:-rV6P!cZ5@qG9#tL1^dX0*BfW8Yh%NsKu}
+      CORS_ORIGINS: '["http://localhost:3000", "http://frontend:3000"]'
     ports:
-      - "3002:3001"
+      - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app:ro
+      - ./backend/scripts:/app/scripts:ro
     networks:
       - lab_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:3001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+  # React Frontend
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: psychology_lab_frontend
     environment:
-      REACT_APP_API_URL: http://localhost:3002
+      REACT_APP_API_URL: http://localhost:3001
     ports:
       - "3000:80"
     depends_on:
@@ -54,18 +75,53 @@ services:
       - lab_network
     restart: unless-stopped
 
-  adminer:
-    image: adminer
-    container_name: psychology_lab_adminer
+  # pgAdmin 資料庫管理工具
+  pgadmin:
+    image: dpage/pgadmin4:8.2
+    container_name: psychology_lab_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@psychologylab.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_LISTEN_ADDRESS: '0.0.0.0'
+      PGADMIN_LISTEN_PORT: 80
     ports:
-      - "8080:8080"
+      - "8080:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
     networks:
       - lab_network
     restart: unless-stopped
+    profiles:
+      - dev  # 只在開發環境中啟動
+
+  # Nginx 反向代理 (可選)
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: psychology_lab_nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - lab_network
+    restart: unless-stopped
+    profiles:
+      - production  # 只在生產環境中啟動
 
 volumes:
   postgres_data:
+    name: psychology-lab-postgres-data
+  pgadmin_data:
+    name: psychology-lab-pgadmin-data
 
 networks:
   lab_network:
     driver: bridge
+    name: psychology-lab-network
