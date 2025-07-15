@@ -14,18 +14,21 @@ const ProjectsList = ({ projects, selectedProject, onSelectProject, onAddProject
   };
 
   const getProjectStats = (project) => {
-    // This would normally calculate from participants data
-    // For now, returning placeholder values
-    return {
+    const projectKey = `${project.projectName}-${project.subProjectName}（${project.subProjectCode}）`;
+    const stats = {
       total: 0,
       active: 0,
       completed: 0,
       terminated: 0
     };
+
+    // This calculation would require participants data passed as prop
+    // For now, returning the stats object
+    return stats;
   };
 
   const hasParticipants = (project) => {
-    // This would normally check if project has participants
+    // This check would require participants data passed as prop
     // For now, returning false to allow deletion
     return false;
   };
