@@ -6,20 +6,10 @@ const AddParticipantModal = ({
   isEditing,
   formData,
   setFormData,
-  projects,
   onSubmit,
-  onClose,
-  onGoToAddProject
+  onClose
 }) => {
   if (!isOpen) return null;
-
-  const getAvailableSubProjects = () => {
-    return projects.map(project => ({
-      value: `${project.projectName}-${project.subProjectName}（${project.subProjectCode}）`,
-      label: `${project.projectName} - ${project.subProjectName}（${project.subProjectCode}）`,
-      code: project.subProjectCode
-    }));
-  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -43,62 +33,17 @@ const AddParticipantModal = ({
             />
           </div>
           
-          {/* 姓名和子計畫 */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                姓名 *
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            {!isEditing && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  子計畫 *
-                </label>
-                <select
-                  value={formData.selectedSubProject}
-                  onChange={(e) => {
-                    const selectedProject = getAvailableSubProjects().find(p => p.value === e.target.value);
-                    setFormData({
-                      ...formData,
-                      selectedSubProject: e.target.value,
-                      participantId: selectedProject ? `${selectedProject.code}-` : ''
-                    });
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">選擇子計畫</option>
-                  {getAvailableSubProjects().map(project => (
-                    <option key={project.value} value={project.value}>
-                      {project.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-          
-          {/* 參與者編號 */}
+          {/* 姓名 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              參與者編號 {!isEditing && '*'}
+              姓名 *
             </label>
             <input
               type="text"
-              value={formData.participantId}
-              onChange={(e) => setFormData({...formData, participantId: e.target.value})}
+              value={formData.name}
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="例如：AGE-001"
-              required={!isEditing}
-              disabled={isEditing}
+              required
             />
           </div>
           
@@ -170,22 +115,6 @@ const AddParticipantModal = ({
               </select>
             </div>
           </div>
-          
-          {/* 快速新增子計畫 */}
-          {!isEditing && (
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm text-blue-800 mb-2">
-                💡 找不到需要的子計畫？
-              </p>
-              <button
-                type="button"
-                onClick={onGoToAddProject}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-              >
-                + 快速新增子計畫
-              </button>
-            </div>
-          )}
         </div>
         
         {/* 按鈕區域 */}

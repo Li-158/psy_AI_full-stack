@@ -10,7 +10,6 @@ export const sampleParticipants = [
   {
     id: 1,
     uuid: generateUUID(),
-    participantId: 'AGE-001',
     name: '王小明',
     phone: '0912-345-678',
     email: 'wang@example.com',
@@ -20,8 +19,8 @@ export const sampleParticipants = [
     projectStatus: {
       '認知行為研究計畫-老化與認知（AGE）': {
         status: '進行中',
-        participantProjectId: 'P001-001',
-        participantSubProjectId: 'S001-001',
+        participantProjectId: 'COG-001',
+        participantSubProjectId: 'AGE-001',
         terminationReason: '',
         consentVersions: ['v1.0', 'v1.1'],
         joinDate: '2024-01-15'
@@ -34,6 +33,7 @@ export const sampleProjects = [
   {
     id: 1,
     projectName: '認知行為研究計畫',
+    projectCode: 'COG',
     subProjectName: '老化與認知',
     subProjectCode: 'AGE',
     researcherName: '王博士',

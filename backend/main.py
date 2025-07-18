@@ -8,7 +8,7 @@ from datetime import datetime
 
 from app.config import settings
 from app.database import db
-from app.routers import auth, participants, projects, subprojects, users, researchers
+from app.routers import auth, participants, projects, subprojects, users, researchers, project_participants
 from app.schemas import HealthCheck
 
 # 配置日誌
@@ -62,6 +62,7 @@ app.include_router(projects.router)
 app.include_router(subprojects.router)
 app.include_router(users.router)
 app.include_router(researchers.router)
+app.include_router(project_participants.router)
 
 
 @app.get("/")

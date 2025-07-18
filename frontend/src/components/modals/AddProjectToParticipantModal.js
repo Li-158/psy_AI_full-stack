@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 
 const AddProjectToParticipantModal = ({
@@ -10,14 +10,98 @@ const AddProjectToParticipantModal = ({
   onSubmit,
   onClose
 }) => {
+  const [availableProjects, setAvailableProjects] = useState([]);
+  const [availableSubProjects, setAvailableSubProjects] = useState([]);
+  const [selectedProjectCode, setSelectedProjectCode] = useState('');
+  const [selectedSubProjectCode, setSelectedSubProjectCode] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+  
+  useEffect(() => {
+    // Get unique project names and their codes
+    const projectMap = new Map();
+    projects.forEach(project => {
+      if (!projectMap.has(project.projectName)) {
+        projectMap.set(project.projectName, project.projectCode);
+      }
+    });
+    setAvailableProjects(Array.from(projectMap, ([name, code]) => ({ name, code })));
+  }, [projects]);
+  
+  useEffect(() => {
+    // Filter subprojects based on selected project
+    if (formData.projectName) {
+      const filtered = projects.filter(p => p.projectName === formData.projectName);
+      setAvailableSubProjects(filtered);
+      
+      // Set project code and ID
+      const projectInfo = availableProjects.find(p => p.name === formData.projectName);
+      if (projectInfo) {
+        setSelectedProjectCode(projectInfo.code);
+        
+        // Find the first project with this name to get the ID
+        const firstProject = projects.find(p => p.projectName === formData.projectName);
+        if (firstProject && firstProject.id) {
+          setSelectedProjectId(firstProject.id);
+          setFormData(prev => ({...prev, projectId: firstProject.id}));
+        }
+        
+        // Check if participant has participated in this project before
+        const previousParticipation = Object.entries(participant.projectStatus || {}).find(([key]) => 
+          key.startsWith(formData.projectName)
+        );
+        
+        if (previousParticipation) {
+          const prevData = previousParticipation[1];
+          setFormData(prev => ({
+            ...prev,
+            participantProjectId: prevData.participantProjectId || `${projectInfo.code}-`
+          }));
+        } else {
+          setFormData(prev => ({
+            ...prev,
+            participantProjectId: `${projectInfo.code}-`
+          }));
+        }
+      }
+    } else {
+      setAvailableSubProjects([]);
+      setSelectedProjectCode('');
+      setSelectedProjectId(null);
+    }
+  }, [formData.projectName, projects, availableProjects, participant, setFormData]);
+  
+  useEffect(() => {
+    // Set subproject code when subproject is selected
+    if (formData.subProjectName) {
+      const subProject = availableSubProjects.find(p => p.subProjectName === formData.subProjectName);
+      if (subProject) {
+        setSelectedSubProjectCode(subProject.subProjectCode);
+        setFormData(prev => ({
+          ...prev,
+          participantSubProjectId: `${subProject.subProjectCode}-`
+        }));
+      }
+    } else {
+      setSelectedSubProjectCode('');
+    }
+  }, [formData.subProjectName, availableSubProjects, setFormData]);
+
   if (!isOpen || !participant) return null;
 
-  const getAvailableSubProjects = () => {
-    return projects.map(project => ({
-      value: `${project.projectName}-${project.subProjectName}（${project.subProjectCode}）`,
-      label: `${project.projectName} - ${project.subProjectName}（${project.subProjectCode}）`,
-      code: project.subProjectCode
-    }));
+  const handleProjectIdChange = (value) => {
+    // Ensure the project code prefix is maintained
+    if (!value.startsWith(selectedProjectCode + '-')) {
+      return;
+    }
+    setFormData({...formData, participantProjectId: value});
+  };
+
+  const handleSubProjectIdChange = (value) => {
+    // Ensure the subproject code prefix is maintained
+    if (!value.startsWith(selectedSubProjectCode + '-')) {
+      return;
+    }
+    setFormData({...formData, participantSubProjectId: value});
   };
 
   return (
@@ -28,23 +112,53 @@ const AddProjectToParticipantModal = ({
         </h2>
         
         <div className="space-y-4">
+          {/* 選擇計畫 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              計畫 *
+            </label>
+            <select
+              value={formData.projectName}
+              onChange={(e) => setFormData({
+                ...formData, 
+                projectName: e.target.value,
+                subProjectName: '', // Reset subproject when project changes
+                participantSubProjectId: ''
+              })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">選擇計畫</option>
+              {availableProjects.map(project => (
+                <option key={project.name} value={project.name}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          
           {/* 選擇子計畫 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               子計畫 *
             </label>
             <select
-              value={formData.selectedSubProject}
-              onChange={(e) => setFormData({...formData, selectedSubProject: e.target.value})}
+              value={formData.subProjectName}
+              onChange={(e) => setFormData({...formData, subProjectName: e.target.value})}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
+              disabled={!formData.projectName}
             >
               <option value="">選擇子計畫</option>
-              {getAvailableSubProjects()
-                .filter(project => !participant.projectStatus?.[project.value])
-                .map(project => (
-                  <option key={project.value} value={project.value}>
-                    {project.label}
+              {availableSubProjects
+                .filter(subProject => {
+                  // Check if participant already in this subproject
+                  const projectKey = `${subProject.projectName}-${subProject.subProjectName}（${subProject.subProjectCode}）`;
+                  return !participant.projectStatus?.[projectKey];
+                })
+                .map(subProject => (
+                  <option key={subProject.id} value={subProject.subProjectName}>
+                    {subProject.subProjectName}（{subProject.subProjectCode}）
                   </option>
                 ))
               }
@@ -55,27 +169,35 @@ const AddProjectToParticipantModal = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                計畫編號
+                計畫編號 *
               </label>
               <input
                 type="text"
                 value={formData.participantProjectId}
-                onChange={(e) => setFormData({...formData, participantProjectId: e.target.value})}
+                onChange={(e) => handleProjectIdChange(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="P001-001"
+                placeholder={`${selectedProjectCode}-XXX`}
+                disabled={!selectedProjectCode}
               />
+              {selectedProjectCode && (
+                <p className="text-xs text-gray-500 mt-1">格式: {selectedProjectCode}-編號</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                子計畫編號
+                子計畫編號 *
               </label>
               <input
                 type="text"
                 value={formData.participantSubProjectId}
-                onChange={(e) => setFormData({...formData, participantSubProjectId: e.target.value})}
+                onChange={(e) => handleSubProjectIdChange(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="S001-001"
+                placeholder={`${selectedSubProjectCode}-XXX`}
+                disabled={!selectedSubProjectCode}
               />
+              {selectedSubProjectCode && (
+                <p className="text-xs text-gray-500 mt-1">格式: {selectedSubProjectCode}-編號</p>
+              )}
             </div>
           </div>
           

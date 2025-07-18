@@ -43,18 +43,17 @@ const ParticipantManagementApp = () => {
 
   const [formData, setFormData] = useState({
     uuid: '',
-    participantId: '',
     name: '',
     phone: '',
     email: '',
     address: '',
     birthDate: '',
-    gender: '',
-    selectedSubProject: ''
+    gender: ''
   });
 
   const [projectFormData, setProjectFormData] = useState({
     projectName: '',
+    projectCode: '',
     subProjectName: '',
     subProjectCode: '',
     researcherName: '',
@@ -63,7 +62,8 @@ const ParticipantManagementApp = () => {
   });
 
   const [addProjectForm, setAddProjectForm] = useState({
-    selectedSubProject: '',
+    projectName: '',
+    subProjectName: '',
     participantProjectId: '',
     participantSubProjectId: '',
     status: '進行中',
@@ -86,45 +86,25 @@ const ParticipantManagementApp = () => {
 
   // Handlers for Participants
   const handleAddParticipant = () => {
-    if (!formData.name || !formData.selectedSubProject) {
+    if (!formData.name) {
       setToastMessage({
         show: true,
         type: 'error',
-        message: '請填寫必要欄位：姓名、子計畫'
+        message: '請填寫必要欄位：姓名'
       });
       return;
     }
 
-    if (!formData.participantId) {
-      setToastMessage({
-        show: true,
-        type: 'error',
-        message: '請填寫參與者編號'
-      });
-      return;
-    }
-
-    const projectKey = formData.selectedSubProject;
     const newParticipant = {
       id: Date.now(),
       uuid: formData.uuid || generateUUID(),
-      participantId: formData.participantId,
       name: formData.name,
       phone: formData.phone,
       email: formData.email,
       address: formData.address,
       birthDate: formData.birthDate,
       gender: formData.gender,
-      projectStatus: {
-        [projectKey]: {
-          status: '進行中',
-          participantProjectId: '',
-          participantSubProjectId: '',
-          terminationReason: '',
-          consentVersions: [],
-          joinDate: new Date().toISOString().split('T')[0]
-        }
-      }
+      projectStatus: {}
     };
 
     setParticipants([...participants, newParticipant]);
@@ -220,16 +200,42 @@ const ParticipantManagementApp = () => {
   };
 
   const handleAddProjectToParticipant = () => {
-    if (!addProjectForm.selectedSubProject) {
+    if (!addProjectForm.projectName || !addProjectForm.subProjectName) {
       setToastMessage({
         show: true,
         type: 'error',
-        message: '請選擇子計畫'
+        message: '請選擇計畫和子計畫'
+      });
+      return;
+    }
+
+    if (!addProjectForm.participantProjectId || !addProjectForm.participantSubProjectId) {
+      setToastMessage({
+        show: true,
+        type: 'error',
+        message: '請填寫計畫編號和子計畫編號'
       });
       return;
     }
     
-    if (selectedParticipant.projectStatus?.[addProjectForm.selectedSubProject]) {
+    // Find the selected subproject to get its code
+    const selectedSubProject = projects.find(p => 
+      p.projectName === addProjectForm.projectName && 
+      p.subProjectName === addProjectForm.subProjectName
+    );
+    
+    if (!selectedSubProject) {
+      setToastMessage({
+        show: true,
+        type: 'error',
+        message: '找不到選擇的子計畫'
+      });
+      return;
+    }
+    
+    const projectKey = `${addProjectForm.projectName}-${addProjectForm.subProjectName}（${selectedSubProject.subProjectCode}）`;
+    
+    if (selectedParticipant.projectStatus?.[projectKey]) {
       setToastMessage({
         show: true,
         type: 'error',
@@ -244,7 +250,7 @@ const ParticipantManagementApp = () => {
           ...p,
           projectStatus: {
             ...p.projectStatus,
-            [addProjectForm.selectedSubProject]: {
+            [projectKey]: {
               status: addProjectForm.status,
               participantProjectId: addProjectForm.participantProjectId,
               participantSubProjectId: addProjectForm.participantSubProjectId,
@@ -264,7 +270,7 @@ const ParticipantManagementApp = () => {
       ...selectedParticipant,
       projectStatus: {
         ...selectedParticipant.projectStatus,
-        [addProjectForm.selectedSubProject]: {
+        [projectKey]: {
           status: addProjectForm.status,
           participantProjectId: addProjectForm.participantProjectId,
           participantSubProjectId: addProjectForm.participantSubProjectId,
@@ -284,7 +290,8 @@ const ParticipantManagementApp = () => {
     
     setShowAddProjectToParticipant(false);
     setAddProjectForm({
-      selectedSubProject: '',
+      projectName: '',
+      subProjectName: '',
       participantProjectId: '',
       participantSubProjectId: '',
       status: '進行中',
@@ -296,11 +303,11 @@ const ParticipantManagementApp = () => {
 
   // Handlers for Projects
   const handleAddProject = () => {
-    if (!projectFormData.projectName || !projectFormData.subProjectName || !projectFormData.subProjectCode || !projectFormData.researcherName) {
+    if (!projectFormData.projectName || !projectFormData.projectCode || !projectFormData.subProjectName || !projectFormData.subProjectCode || !projectFormData.researcherName) {
       setToastMessage({
         show: true,
         type: 'error',
-        message: '請填寫必要欄位：計畫名稱、子計畫名稱、子計畫代碼、研究人員姓名'
+        message: '請填寫必要欄位：計畫名稱、計畫代碼、子計畫名稱、子計畫代碼、研究人員姓名'
       });
       return;
     }
@@ -308,6 +315,7 @@ const ParticipantManagementApp = () => {
     const newProject = {
       id: Date.now(),
       projectName: projectFormData.projectName,
+      projectCode: projectFormData.projectCode,
       subProjectName: projectFormData.subProjectName,
       subProjectCode: projectFormData.subProjectCode,
       researcherName: projectFormData.researcherName,
@@ -408,8 +416,6 @@ const ParticipantManagementApp = () => {
   const resetFormData = () => {
     setFormData({
       uuid: '',
-      participantId: '',
-      selectedSubProject: '',
       name: '',
       phone: '',
       email: '',
@@ -422,6 +428,7 @@ const ParticipantManagementApp = () => {
   const resetProjectFormData = () => {
     setProjectFormData({
       projectName: '',
+      projectCode: '',
       subProjectName: '',
       subProjectCode: '',
       researcherName: '',
@@ -492,8 +499,7 @@ const ParticipantManagementApp = () => {
                 participant={selectedParticipant}
                 onEdit={() => {
                   setFormData({
-                    ...selectedParticipant,
-                    selectedSubProject: Object.keys(selectedParticipant.projectStatus || {})[0] || ''
+                    ...selectedParticipant
                   });
                   setEditingId(selectedParticipant.id);
                   setShowAddForm(true);
@@ -527,6 +533,7 @@ const ParticipantManagementApp = () => {
                 onSelectProject={setSelectedProject}
                 onAddProject={() => setShowAddProjectForm(true)}
                 onDeleteProject={handleDeleteProject}
+                participants={participants}
               />
             </div>
 
@@ -565,16 +572,11 @@ const ParticipantManagementApp = () => {
           isEditing={!!editingId}
           formData={formData}
           setFormData={setFormData}
-          projects={projects}
           onSubmit={editingId ? handleUpdateParticipant : handleAddParticipant}
           onClose={() => {
             setShowAddForm(false);
             setEditingId(null);
             resetFormData();
-          }}
-          onGoToAddProject={() => {
-            setShowAddForm(false);
-            setShowAddProjectForm(true);
           }}
         />
 
@@ -600,7 +602,8 @@ const ParticipantManagementApp = () => {
           onClose={() => {
             setShowAddProjectToParticipant(false);
             setAddProjectForm({
-              selectedSubProject: '',
+              projectName: '',
+              subProjectName: '',
               participantProjectId: '',
               participantSubProjectId: '',
               status: '進行中',

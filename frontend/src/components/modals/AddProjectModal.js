@@ -11,36 +11,74 @@ const AddProjectModal = ({
 }) => {
   if (!isOpen) return null;
 
+  // Get unique project names
+  const existingProjectNames = [...new Set(projects.map(p => p.projectName))];
+
+  const handleProjectNameChange = (value) => {
+    setFormData({...formData, projectName: value});
+    
+    // If selecting existing project, get its code
+    const existingProject = projects.find(p => p.projectName === value);
+    if (existingProject) {
+      setFormData({
+        ...formData, 
+        projectName: value,
+        projectCode: existingProject.projectCode
+      });
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-semibold mb-4">新增計畫</h2>
         
         <div className="space-y-4">
-          {/* 1. 計畫名稱 - 移到最上方 */}
+          {/* 1. 計畫名稱 - 可選擇已有的或輸入新的 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               計畫名稱 *
             </label>
             <input
               type="text"
+              list="project-names"
               value={formData.projectName}
-              onChange={(e) => {
-                const value = e.target.value;
-                setFormData({...formData, projectName: value});
-              }}
+              onChange={(e) => handleProjectNameChange(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="例如：認知行為研究計畫"
+              placeholder="選擇現有計畫或輸入新計畫名稱"
               required
             />
-            {projects.find(p => p.projectName === formData.projectName) && formData.projectName !== '' && (
-              <p className="text-sm text-blue-600 mt-1">
-                💡 將新增為「{formData.projectName}」的子計畫
+            <datalist id="project-names">
+              {existingProjectNames.map(name => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            {existingProjectNames.length > 0 && (
+              <p className="text-sm text-gray-500 mt-1">
+                現有計畫：{existingProjectNames.join('、')}
               </p>
             )}
           </div>
 
-          {/* 2. 子計畫名稱 & 子計畫代碼 - 重新命名後的欄位 */}
+          {/* 2. 對應計畫代碼 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              對應計畫代碼 *
+            </label>
+            <input
+              type="text"
+              value={formData.projectCode}
+              onChange={(e) => setFormData({...formData, projectCode: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="例如：PROJ"
+              required
+            />
+            <p className="text-sm text-gray-500 mt-1">
+              此代碼將用於生成計畫編號格式
+            </p>
+          </div>
+
+          {/* 3. 子計畫名稱 & 子計畫代碼 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -65,13 +103,13 @@ const AddProjectModal = ({
                 value={formData.subProjectCode}
                 onChange={(e) => setFormData({...formData, subProjectCode: e.target.value})}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="例如：AGE"
+                placeholder="例如：MEM"
                 required
               />
             </div>
           </div>
 
-          {/* 3. 研究人員姓名 & Email */}
+          {/* 4. 研究人員姓名 & Email */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -99,7 +137,7 @@ const AddProjectModal = ({
             </div>
           </div>
 
-          {/* 4. 計畫描述 */}
+          {/* 5. 計畫描述 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               計畫描述
@@ -113,7 +151,7 @@ const AddProjectModal = ({
           </div>
         </div>
 
-        {/* 按鈕區域 - 不變 */}
+        {/* 按鈕區域 */}
         <div className="flex justify-end gap-3 mt-6">
           <button
             onClick={onClose}

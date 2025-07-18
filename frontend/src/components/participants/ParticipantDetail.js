@@ -27,8 +27,7 @@ const ParticipantDetail = ({
       <div className="flex justify-between items-start mb-6">
         <div>
           <h2 className="text-2xl font-semibold">{participant.name}</h2>
-          <p className="text-gray-600 mt-1">參與者編號：{participant.participantId}</p>
-          <p className="text-sm text-blue-600 font-mono">UUID：{participant.uuid}</p>
+          <p className="text-sm text-blue-600 font-mono mt-1">UUID：{participant.uuid}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -53,25 +52,25 @@ const ParticipantDetail = ({
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Phone size={16} className="text-gray-400" />
-            <span className="font-medium">{participant.phone}</span>
+            <span className="font-medium">{participant.phone || '未填寫'}</span>
           </div>
           <div className="flex items-center gap-2">
             <Mail size={16} className="text-gray-400" />
-            <span className="font-medium">{participant.email}</span>
+            <span className="font-medium">{participant.email || '未填寫'}</span>
           </div>
           <div className="flex items-center gap-2">
             <Home size={16} className="text-gray-400" />
-            <span className="font-medium">{participant.address}</span>
+            <span className="font-medium">{participant.address || '未填寫'}</span>
           </div>
         </div>
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Calendar size={16} className="text-gray-400" />
-            <span className="font-medium">生日：{participant.birthDate}</span>
+            <span className="font-medium">生日：{participant.birthDate || '未填寫'}</span>
           </div>
           <div className="flex items-center gap-2">
             <User size={16} className="text-gray-400" />
-            <span className="font-medium">性別：{participant.gender}</span>
+            <span className="font-medium">性別：{participant.gender || '未填寫'}</span>
           </div>
         </div>
       </div>

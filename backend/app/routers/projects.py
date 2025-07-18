@@ -8,7 +8,12 @@ from app.schemas import (
     ProjectCreate, 
     Subproject,
     SubprojectCreate,
-    User
+    User,
+    ConsentVersion,
+    ConsentVersionCreate,
+    ProjectParticipant,
+    ProjectParticipantCreate,
+    ProjectParticipantUpdate
 )
 from app.auth import get_current_user, require_role
 from app.database import db
@@ -403,6 +408,214 @@ async def get_project_stats(
         raise
     except Exception as e:
         logger.error(f"❌ Error getting project stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+# 同意書版本相關端點
+@router.post("/{project_id}/consent-versions", response_model=ConsentVersion, status_code=status.HTTP_201_CREATED)
+async def create_consent_version(
+    project_id: UUID,
+    consent_version: ConsentVersionCreate,
+    current_user: User = Depends(require_role(['admin', 'researcher']))
+):
+    """為專案創建同意書版本"""
+    logger.info(f"Creating consent version for project {project_id} by user {current_user.email}")
+    
+    try:
+        # 檢查專案是否存在
+        project_exists = await db.fetchrow("SELECT id FROM projects WHERE id = $1", project_id)
+        if not project_exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found"
+            )
+        
+        query = """
+            INSERT INTO consent_versions (project_id, version_name, description, is_active)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, project_id, version_name, description, is_active, created_at, updated_at
+        """
+        
+        result = await db.fetchrow(
+            query,
+            project_id,
+            consent_version.version_name,
+            consent_version.description,
+            consent_version.is_active
+        )
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create consent version"
+            )
+        
+        logger.info(f"✅ Consent version created: {result['id']}")
+        return ConsentVersion(**dict(result))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error creating consent version: {e}")
+        if "unique constraint" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Consent version with this name already exists in this project"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@router.get("/{project_id}/consent-versions", response_model=List[ConsentVersion])
+async def get_consent_versions(
+    project_id: UUID,
+    active_only: bool = Query(False, description="只返回啟用的版本"),
+    current_user: User = Depends(get_current_user)
+):
+    """獲取專案的同意書版本列表"""
+    logger.info(f"Getting consent versions for project {project_id} by user {current_user.email}")
+    
+    try:
+        # 檢查專案是否存在
+        project_exists = await db.fetchrow("SELECT id FROM projects WHERE id = $1", project_id)
+        if not project_exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found"
+            )
+        
+        query = """
+            SELECT id, project_id, version_name, description, is_active, created_at, updated_at
+            FROM consent_versions
+            WHERE project_id = $1
+        """
+        
+        params = [project_id]
+        
+        if active_only:
+            query += " AND is_active = true"
+        
+        query += " ORDER BY created_at DESC"
+        
+        results = await db.fetch(query, *params)
+        
+        versions = [ConsentVersion(**dict(row)) for row in results]
+        logger.info(f"✅ Retrieved {len(versions)} consent versions")
+        
+        return versions
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error getting consent versions: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@router.put("/{project_id}/consent-versions/{version_id}", response_model=ConsentVersion)
+async def update_consent_version(
+    project_id: UUID,
+    version_id: UUID,
+    consent_version: ConsentVersionCreate,
+    current_user: User = Depends(require_role(['admin', 'researcher']))
+):
+    """更新同意書版本"""
+    logger.info(f"Updating consent version {version_id} for project {project_id} by user {current_user.email}")
+    
+    try:
+        # 檢查版本是否存在且屬於該專案
+        existing = await db.fetchrow(
+            "SELECT id FROM consent_versions WHERE id = $1 AND project_id = $2", 
+            version_id, project_id
+        )
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Consent version not found"
+            )
+        
+        query = """
+            UPDATE consent_versions 
+            SET version_name = $3, description = $4, is_active = $5, updated_at = NOW()
+            WHERE id = $1 AND project_id = $2
+            RETURNING id, project_id, version_name, description, is_active, created_at, updated_at
+        """
+        
+        result = await db.fetchrow(
+            query,
+            version_id,
+            project_id,
+            consent_version.version_name,
+            consent_version.description,
+            consent_version.is_active
+        )
+        
+        logger.info(f"✅ Consent version updated: {version_id}")
+        return ConsentVersion(**dict(result))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error updating consent version: {e}")
+        if "unique constraint" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Consent version with this name already exists in this project"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@router.delete("/{project_id}/consent-versions/{version_id}")
+async def delete_consent_version(
+    project_id: UUID,
+    version_id: UUID,
+    current_user: User = Depends(require_role(['admin']))
+):
+    """刪除同意書版本 (僅管理員)"""
+    logger.info(f"Deleting consent version {version_id} for project {project_id} by admin {current_user.email}")
+    
+    try:
+        # 檢查版本是否存在且屬於該專案
+        existing = await db.fetchrow(
+            "SELECT id FROM consent_versions WHERE id = $1 AND project_id = $2", 
+            version_id, project_id
+        )
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Consent version not found"
+            )
+        
+        # 檢查是否有參與者使用此版本
+        participant_count = await db.fetchval(
+            "SELECT COUNT(*) FROM participant_consent_versions WHERE consent_version_id = $1", 
+            version_id
+        )
+        if participant_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot delete consent version used by participants"
+            )
+        
+        await db.execute("DELETE FROM consent_versions WHERE id = $1 AND project_id = $2", version_id, project_id)
+        
+        logger.info(f"✅ Consent version deleted: {version_id}")
+        return {"message": "Consent version deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error deleting consent version: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"

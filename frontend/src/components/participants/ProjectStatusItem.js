@@ -1,8 +1,49 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 
 const ProjectStatusItem = ({ projectKey, projectData, participantId, onUpdate, onDelete, isExpanded, onToggle }) => {
   const [projectInfo, subProjectInfo] = projectKey.split('-');
+  const [availableVersions, setAvailableVersions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  
+  // 從 projectKey 解析出專案 ID（假設專案資料中有 id）
+  const getProjectId = () => {
+    // 這裡需要根據實際的資料結構來獲取專案 ID
+    // 可能需要從父組件傳遞專案列表或專案 ID
+    return projectData.projectId;
+  };
+
+  useEffect(() => {
+    if (isExpanded && projectData.projectId) {
+      fetchConsentVersions();
+    }
+  }, [isExpanded, projectData.projectId]);
+
+  const fetchConsentVersions = async () => {
+    if (!projectData.projectId) return;
+    
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/projects/${projectData.projectId}/consent-versions?active_only=true`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      
+      if (response.ok) {
+        const versions = await response.json();
+        setAvailableVersions(versions);
+      }
+    } catch (error) {
+      console.error('Error fetching consent versions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -108,24 +149,37 @@ const ProjectStatusItem = ({ projectKey, projectData, participantId, onUpdate, o
           
           <div>
             <label className="text-xs text-gray-600">同意書版本</label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {['v1.0', 'v1.1', 'v2.0', 'v2.1'].map(version => (
-                <label key={version} className="flex items-center gap-1 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={projectData.consentVersions?.includes(version) || false}
-                    onChange={(e) => {
-                      const newVersions = e.target.checked
-                        ? [...(projectData.consentVersions || []), version]
-                        : (projectData.consentVersions || []).filter(v => v !== version);
-                      onUpdate(participantId, projectKey, 'consentVersions', newVersions);
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  {version}
-                </label>
-              ))}
-            </div>
+            {loading ? (
+              <div className="text-center py-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mx-auto"></div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2 mt-1">
+                {availableVersions.length > 0 ? (
+                  availableVersions.map(version => (
+                    <label key={version.id} className="flex items-center gap-1 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={projectData.consentVersions?.includes(version.version_name) || false}
+                        onChange={(e) => {
+                          const newVersions = e.target.checked
+                            ? [...(projectData.consentVersions || []), version.version_name]
+                            : (projectData.consentVersions || []).filter(v => v !== version.version_name);
+                          onUpdate(participantId, projectKey, 'consentVersions', newVersions);
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      {version.version_name}
+                      {version.description && (
+                        <span className="text-xs text-gray-500 ml-1">({version.description})</span>
+                      )}
+                    </label>
+                  ))
+                ) : (
+                  <span className="text-sm text-gray-500">尚未設定同意書版本</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
