@@ -1,25 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 
 const ProjectStatusItem = ({ projectKey, projectData, participantId, onUpdate, onDelete, isExpanded, onToggle }) => {
   const [projectInfo, subProjectInfo] = projectKey.split('-');
   const [availableVersions, setAvailableVersions] = useState([]);
   const [loading, setLoading] = useState(false);
-  
-  // 從 projectKey 解析出專案 ID（假設專案資料中有 id）
-  const getProjectId = () => {
-    // 這裡需要根據實際的資料結構來獲取專案 ID
-    // 可能需要從父組件傳遞專案列表或專案 ID
-    return projectData.projectId;
-  };
 
-  useEffect(() => {
-    if (isExpanded && projectData.projectId) {
-      fetchConsentVersions();
-    }
-  }, [isExpanded, projectData.projectId]);
-
-  const fetchConsentVersions = async () => {
+  const fetchConsentVersions = useCallback(async () => {
     if (!projectData.projectId) return;
     
     setLoading(true);
@@ -43,7 +30,13 @@ const ProjectStatusItem = ({ projectKey, projectData, participantId, onUpdate, o
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectData.projectId]);
+
+  useEffect(() => {
+    if (isExpanded && projectData.projectId) {
+      fetchConsentVersions();
+    }
+  }, [isExpanded, projectData.projectId, fetchConsentVersions]);
   
   return (
     <div className="border rounded-lg overflow-hidden">

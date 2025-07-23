@@ -14,8 +14,7 @@ const AddProjectToParticipantModal = ({
   const [availableSubProjects, setAvailableSubProjects] = useState([]);
   const [selectedProjectCode, setSelectedProjectCode] = useState('');
   const [selectedSubProjectCode, setSelectedSubProjectCode] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState(null);
-  
+
   useEffect(() => {
     // Get unique project names and their codes
     const projectMap = new Map();
@@ -41,7 +40,6 @@ const AddProjectToParticipantModal = ({
         // Find the first project with this name to get the ID
         const firstProject = projects.find(p => p.projectName === formData.projectName);
         if (firstProject && firstProject.id) {
-          setSelectedProjectId(firstProject.id);
           setFormData(prev => ({...prev, projectId: firstProject.id}));
         }
         
@@ -66,7 +64,6 @@ const AddProjectToParticipantModal = ({
     } else {
       setAvailableSubProjects([]);
       setSelectedProjectCode('');
-      setSelectedProjectId(null);
     }
   }, [formData.projectName, projects, availableProjects, participant, setFormData]);
   

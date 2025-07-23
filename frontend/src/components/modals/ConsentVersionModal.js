@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Plus, Save, Trash2, Edit2, Check, XCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Plus, Trash2, Edit2, Check, XCircle } from 'lucide-react';
 
 const ConsentVersionModal = ({ project, onClose, onUpdate }) => {
   const [versions, setVersions] = useState([]);
@@ -8,11 +8,7 @@ const ConsentVersionModal = ({ project, onClose, onUpdate }) => {
   const [newVersion, setNewVersion] = useState({ version_name: '', description: '', is_active: true });
   const [showAddForm, setShowAddForm] = useState(false);
 
-  useEffect(() => {
-    fetchVersions();
-  }, [project]);
-
-  const fetchVersions = async () => {
+  const fetchVersions = useCallback(async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -33,7 +29,11 @@ const ConsentVersionModal = ({ project, onClose, onUpdate }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [project.id]);
+
+  useEffect(() => {
+    fetchVersions();
+  }, [fetchVersions]);
 
   const handleAddVersion = async () => {
     if (!newVersion.version_name.trim()) {

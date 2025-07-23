@@ -1,0 +1,19 @@
+# 開發階段
+FROM node:18-alpine
+
+WORKDIR /app
+
+# 複製 package.json 和 package-lock.json（如果存在）
+COPY package*.json ./
+
+# 安裝所有依賴（包括開發依賴）
+RUN npm install
+
+# 複製所有源代碼
+COPY . .
+
+# 暴露端口
+EXPOSE 3000
+
+# 啟動開發服務器
+CMD ["npm", "start"]

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Users, FileText } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Users, FileText, LogOut } from 'lucide-react';
 
 // Common Components
 import Toast from './components/common/Toast';
@@ -21,7 +22,14 @@ import AddProjectToParticipantModal from './components/modals/AddProjectToPartic
 // Utils
 import { generateUUID, sampleParticipants, sampleProjects } from './utils/sampleData';
 
-const ParticipantManagementApp = () => {
+// Auth
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import PrivateRoute from './components/PrivateRoute';
+import LoginPage from './pages/LoginPage';
+
+
+const MainApp = () => {
+  const { user, logout } = useAuth();
   // State Management
   const [participants, setParticipants] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -448,7 +456,22 @@ const ParticipantManagementApp = () => {
       />
       
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-8">心理學實驗參與者管理系統</h1>
+        {/* Header with user info and logout */}
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-800">心理學實驗參與者管理系統</h1>
+          <div className="flex items-center gap-4">
+            <span className="text-gray-600">
+              {user?.email} ({user?.role === 'admin' ? '管理員' : '研究員'})
+            </span>
+            <button
+              onClick={logout}
+              className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <LogOut size={20} />
+              登出
+            </button>
+          </div>
+        </div>
         
         <div className="flex gap-4 mb-6">
           <button
@@ -618,7 +641,7 @@ const ParticipantManagementApp = () => {
           isOpen={confirmDelete.isOpen}
           onClose={() => setConfirmDelete({ isOpen: false, type: '', data: null })}
           onConfirm={confirmDelete.type === 'subproject' ? confirmDeleteSubProject : confirmDeleteParticipantProject}
-          title={confirmDelete.type === 'subproject' ? '確認刪除子計畫' : '確認刪除參與計畫'}
+          title={confirmDelete.type === 'subproject' ? '確認刪除子計畫' : '確認刪-除參與計畫'}
           message={
             confirmDelete.type === 'subproject'
               ? `確定要刪除「${confirmDelete.data?.subProjectName}」子計畫嗎？此操作無法復原。`
@@ -630,4 +653,25 @@ const ParticipantManagementApp = () => {
   );
 };
 
-export default ParticipantManagementApp;
+const App = () => {
+  return (
+    <Router>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/"
+            element={
+              <PrivateRoute>
+                <MainApp />
+              </PrivateRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </Router>
+  );
+};
+
+export default App;

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FolderPlus, Trash2, FileText, Plus, Edit2, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { FolderPlus, Trash2, FileText } from 'lucide-react';
 import ConsentVersionModal from '../modals/ConsentVersionModal';
 
 const ProjectsList = ({ projects, selectedProject, onSelectProject, onAddProject, onDeleteProject, participants }) => {
@@ -7,8 +7,7 @@ const ProjectsList = ({ projects, selectedProject, onSelectProject, onAddProject
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [selectedProjectForConsent, setSelectedProjectForConsent] = useState(null);
 
-  // 獲取專案的同意書版本
-  const fetchConsentVersions = async (projectId) => {
+  const fetchConsentVersions = useCallback(async (projectId) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${process.env.REACT_APP_API_URL}/api/projects/${projectId}/consent-versions`, {
@@ -27,7 +26,7 @@ const ProjectsList = ({ projects, selectedProject, onSelectProject, onAddProject
     } catch (error) {
       console.error('Error fetching consent versions:', error);
     }
-  };
+  }, []);
 
   // 當專案列表變化時，獲取所有專案的同意書版本
   useEffect(() => {
@@ -44,7 +43,7 @@ const ProjectsList = ({ projects, selectedProject, onSelectProject, onAddProject
         fetchConsentVersions(projectId);
       }
     });
-  }, [projects]);
+  }, [projects, consentVersions, fetchConsentVersions]);
 
   const groupProjectsByProjectName = () => {
     const grouped = {};
